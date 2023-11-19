@@ -4,58 +4,61 @@
  * All credit still goes to Martin and any issues/complaints/questions to me. *
  ******************************************************************************/
 
-// if you want to store your email server-side (hidden), uncomment the next line
-// var TO_ADDRESS = "example@email.net";
+// If you want to store your email server-side (hidden), uncomment the next line
+// const TO_ADDRESS = "example@email.net";
 
-// spit out all the keys/values from the form in HTML for email
-// uses an array of keys if provided or the object to determine field order
+// Spit out all the keys/values from the form in HTML for email
+// Uses an array of keys if provided or the object to determine field order
 function formatMailBody(obj, order) {
-  var result = "";
+  let result = "";
   if (!order) {
     order = Object.keys(obj);
   }
 
-  // loop over all keys in the ordered form data
-  for (var idx in order) {
-    var key = order[idx];
-    result += "<h4 style='text-transform: capitalize; margin-bottom: 0'>" + key + "</h4><div>" + sanitizeInput(obj[key]) + "</div>";
-    // for every key, concatenate an `<h4 />`/`<div />` pairing of the key name and its value, 
+  // Loop over all keys in the ordered form data
+  for (let idx in order) {
+    let key = order[idx];
+    result += `<h4 style='text-transform: capitalize; margin-bottom: 0'>${key}</h4><div>${sanitizeInput(obj[key])}</div>`;
+    // For every key, concatenate an `<h4 />`/`<div />` pairing of the key name and its value, 
     // and append it to the `result` string created at the start.
   }
-  return result; // once the looping is done, `result` will be one long string to put in the email body
+  return result; // Once the looping is done, `result` will be one long string to put in the email body
 }
 
-// sanitize content from the user - trust no one 
-// ref: https://developers.google.com/apps-script/reference/html/html-output#appendUntrusted(String)
+// Sanitize content from the user - trust no one 
+// Ref: https://developers.google.com/apps-script/reference/html/html-output#appendUntrusted(String)
 function sanitizeInput(rawInput) {
-  var placeholder = HtmlService.createHtmlOutput(" ");
+  const placeholder = HtmlService.createHtmlOutput(" ");
   placeholder.appendUntrusted(rawInput);
 
   return placeholder.getContent();
 }
 
 function doPost(e) {
-
   try {
-    Logger.log(e); // the Google Script version of console.log see: Class Logger
+    Logger.log(e); // The Google Script version of console.log see: Class Logger
+    if (e.parameters.itsatrap || e.parameters.submit) {
+      throw new Error("It's a trap!");
+    }
+
     record_data(e);
 
-    // shorter name for form data
-    var mailData = e.parameters;
+    // Shorter name for form data
+    const mailData = e.parameters;
 
-    // names and order of form elements (if set)
-    var orderParameter = e.parameters.formDataNameOrder;
-    var dataOrder;
+    // Names and order of form elements (if set)
+    const orderParameter = e.parameters.formDataNameOrder;
+    let dataOrder;
     if (orderParameter) {
       dataOrder = JSON.parse(orderParameter);
     }
 
-    // determine recepient of the email
-    // if you have your email uncommented above, it uses that `TO_ADDRESS`
-    // otherwise, it defaults to the email provided by the form's data attribute
-    var sendEmailTo = (typeof TO_ADDRESS !== "undefined") ? TO_ADDRESS : mailData.formGoogleSendEmail;
+    // Determine recipient of the email
+    // If you have your email uncommented above, it uses that `TO_ADDRESS`
+    // Otherwise, it defaults to the email provided by the form's data attribute
+    const sendEmailTo = (typeof TO_ADDRESS !== "undefined") ? TO_ADDRESS : mailData.formGoogleSendEmail;
 
-    // send email if to address is set
+    // Send email if to address is set
     if (sendEmailTo) {
       MailApp.sendEmail({
         to: String(sendEmailTo),
@@ -65,14 +68,14 @@ function doPost(e) {
       });
     }
 
-    return ContentService    // return json success results
+    return ContentService    // Return JSON success results
       .createTextOutput(
         JSON.stringify({
           "result": "success",
           "data": JSON.stringify(e.parameters)
         }))
       .setMimeType(ContentService.MimeType.JSON);
-  } catch (error) { // if error return this
+  } catch (error) { // If error return this
     Logger.log(error);
     return ContentService
       .createTextOutput(JSON.stringify({ "result": "error", "error": error }))
@@ -80,76 +83,72 @@ function doPost(e) {
   }
 }
 
-
 /**
- * record_data inserts the data received from the html form submission
+ * Record_data inserts the data received from the HTML form submission
  * e is the data received from the POST
  */
 function record_data(e) {
-  var lock = LockService.getDocumentLock();
-  lock.waitLock(30000); // hold off up to 30 sec to avoid concurrent writing
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000); // Hold off up to 30 sec to avoid concurrent writing
 
   try {
-    Logger.log(JSON.stringify(e)); // log the POST data in case we need to debug it
+    Logger.log(JSON.stringify(e)); // Log the POST data in case we need to debug it
 
-    // select the 'responses' sheet by default
-    var doc = SpreadsheetApp.getActiveSpreadsheet();
-    var sheetName = e.parameters.formGoogleSheetName || "responses";
-    var sheet = doc.getSheetByName(sheetName);
+    // Select the 'responses' sheet by default
+    const doc = SpreadsheetApp.getActiveSpreadsheet();
+    const sheetName = e.parameters.formGoogleSheetName || "responses";
+    const sheet = doc.getSheetByName(sheetName);
 
-    var oldHeader = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    var newHeader = oldHeader.slice();
-    var fieldsFromForm = getDataColumns(e.parameters);
-    var row = [new Date()]; // first element in the row should always be a timestamp
+    const oldHeader = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const newHeader = oldHeader.slice();
+    const fieldsFromForm = getDataColumns(e.parameters);
+    const row = [new Date()]; // First element in the row should always be a timestamp
 
-    // loop through the header columns
-    for (var i = 1; i < oldHeader.length; i++) { // start at 1 to avoid Timestamp column
-      var field = oldHeader[i];
-      var output = getFieldFromData(field, e.parameters);
+    // Loop through the header columns
+    for (let i = 1; i < oldHeader.length; i++) { // Start at 1 to avoid Timestamp column
+      const field = oldHeader[i];
+      const output = getFieldFromData(field, e.parameters);
       row.push(output);
 
-      // mark as stored by removing from form fields
-      var formIndex = fieldsFromForm.indexOf(field);
+      // Mark as stored by removing from form fields
+      const formIndex = fieldsFromForm.indexOf(field);
       if (formIndex > -1) {
         fieldsFromForm.splice(formIndex, 1);
       }
     }
 
-    // set any new fields in our form
-    for (var i = 0; i < fieldsFromForm.length; i++) {
-      var field = fieldsFromForm[i];
-      var output = getFieldFromData(field, e.parameters);
+    // Set any new fields in our form
+    for (let i = 0; i < fieldsFromForm.length; i++) {
+      const field = fieldsFromForm[i];
+      const output = getFieldFromData(field, e.parameters);
       row.push(output);
       newHeader.push(field);
     }
 
-    // more efficient to set values as [][] array than individually
-    var nextRow = sheet.getLastRow() + 1; // get next row
+    // More efficient to set values as [][] array than individually
+    const nextRow = sheet.getLastRow() + 1; // Get next row
     sheet.getRange(nextRow, 1, 1, row.length).setValues([row]);
 
-    // update header row with any new data
+    // Update header row with any new data
     if (newHeader.length > oldHeader.length) {
       sheet.getRange(1, 1, 1, newHeader.length).setValues([newHeader]);
     }
-  }
-  catch (error) {
+  } catch (error) {
     Logger.log(error);
-  }
-  finally {
+  } finally {
     lock.releaseLock();
     return;
   }
-
 }
 
 function getDataColumns(data) {
   return Object.keys(data).filter(function (column) {
-    return !(column === 'formDataNameOrder' || column === 'formGoogleSheetName' || column === 'formGoogleSendEmail' || column === 'itsatrap');
+    return !(column === 'formDataNameOrder' || column === 'formGoogleSheetName' || column === 'formGoogleSendEmail');
   });
 }
 
 function getFieldFromData(field, data) {
-  var values = data[field] || '';
-  var output = values.join ? values.join(', ') : values;
+  const values = data[field] || '';
+  const output = values.join ? values.join(', ') : values;
   return output;
 }
